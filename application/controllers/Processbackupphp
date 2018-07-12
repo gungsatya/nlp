@@ -1,0 +1,271 @@
+<?php
+defined('BASEPATH') OR exit('No direct script access allowed');
+
+class Process extends CI_Controller{
+
+  public function __construct()
+  {
+    parent::__construct();
+    //Codeigniter : Write Less Do More
+  }
+
+  public function task1()
+  {
+    $words          = $this->input->post('words');
+    $words          = trim(preg_replace('/[^A-Za-z0-9\-.,]/', ' ', $words));
+    $words          = preg_replace('/\s+/', ' ', $words);
+    $count          = 0;
+    if(isset($words)&&!empty($words))
+    {
+      $words        = strtolower($words);
+      $word_array   = explode(" ",$words);
+      
+      foreach ($word_array as $key => $value){
+        if (preg_match("/(,\z|\.\z)/", $value)) 
+        {
+            $word_array[$key] = substr_replace($value, " ", -1);
+        }
+
+        if($word_array[$key]==" "||$word_array[$key]=="")
+        {
+            unset($word_array[$key]);
+        }
+      }
+      $count        = count($word_array);
+      $freq_array   = array_count_values($word_array);
+      arsort($freq_array);
+
+      $result       = array();
+      foreach ($freq_array as $word => $freq)
+      {
+        array_push($result,array("word" => $word, "freq"=>$freq));
+      }
+      $json         = array("result"=>$result, "word_count"=>$count);
+    }
+    else {
+      $json         = array("result"=>array(), "word_count"=>0);
+    }
+    echo json_encode($json, JSON_PRETTY_PRINT);
+  }
+  public function task2()
+  {
+    $stemmerFactory = new \Sastrawi\Stemmer\StemmerFactory();
+    $stemmer        = $stemmerFactory->createStemmer();
+    $words          = $this->input->post('words');
+    $words          = trim(preg_replace('/[^A-Za-z0-9]/', ' ', $words));
+    $result         = $stemmer->stem($words);
+    $json           = array("result"=>$result, "word_count"=>str_word_count($words));
+    echo json_encode($json, JSON_PRETTY_PRINT);
+  }
+  public function task3()
+  {
+    $removerFactory = new \Sastrawi\StopWordRemover\StopWordRemoverFactory();
+    $remover        = $removerFactory->createStopWordRemover();
+    $words          = $this->input->post('words');
+    $words          = trim(preg_replace('/[^A-Za-z0-9]/', ' ', $words));
+    $result         = $remover->remove($words);
+    $json           = array("result"=>$result, "word_count"=>str_word_count($words));
+    echo json_encode($json, JSON_PRETTY_PRINT);
+  }
+  public function task4()
+  {
+    $stemmerFactory = new \Sastrawi\Stemmer\StemmerFactory();
+    $removerFactory = new \Sastrawi\StopWordRemover\StopWordRemoverFactory();
+    $stemmer        = $stemmerFactory->createStemmer();
+    $remover        = $removerFactory->createStopWordRemover();
+    $words          = $this->input->post('words');
+    $tmp_para       = explode("\n", $words );
+    $paragraf       = array();
+    $result         = array();
+    foreach ($tmp_para as $key1 => $value)
+    {
+      if(isset($tmp_para[$key1])&&!empty($tmp_para[$key1]))
+      {
+        array_push($paragraf, $tmp_para[$key1]);
+      }
+    }
+    foreach ($paragraf as $key2 => $sentences)
+    {
+      $queries      = $remover->remove($sentences);
+      $queries      = $stemmer->stem($queries);
+      $query_arr    = explode(" ", $queries);
+      $query_arr    = array_count_values($query_arr);
+      arsort($query_arr);
+      $query        = array();
+      foreach($query_arr as $key3 =>$value3 ){array_push($query,$key3);}
+
+      $sentence     = preg_split('/(\?\s|\.\s|!\s)/',$sentences);
+      $D            = count($sentence) - 1;
+      $idf          = array();
+
+      for($x=0; $x<3; $x++)
+      {
+        $qrs                  = "/".$query[$x]."\s/";
+        $idf[$query[$x]]      = 0;
+        $df[$query[$x]]       = 0;
+
+        foreach($sentence as $doc)
+        {
+          $doc = $stemmer->stem($doc);
+          $doc = $remover->remove($doc);
+          if(preg_match($qrs,$doc))
+          {
+            $df[$query[$x]] = $df[$query[$x]] + 1;
+          }
+        }  
+        $idf[$query[$x]]   = 1 + log($D/$df[$query[$x]]);
+      }
+      unset($weight);
+      foreach($sentence as $key4 => $doc)
+      {
+        $weight["doc-".$key4] = 0;
+        $doc          = $stemmer->stem($doc);
+        $doc          = $remover->remove($doc);
+        $terms        = explode(" ", $doc);
+
+        for($x=0; $x<3; $x++)
+        {
+          $tf   = 0;
+          foreach($terms as $term)
+          {
+           if($term == $query[$x])
+           {
+            $tf += 1; 
+           } 
+          }
+          $weight["doc-".$key4] = number_format($weight["doc-".$key4] + $tf * $idf[$query[$x]],2);
+        }
+
+      }
+      arsort($weight);
+      $w_desc = array();
+      foreach($weight as $idx => $val){
+        $idx = str_replace("doc-","",$idx);
+        array_push($w_desc, $idx);
+      }
+      array_push($result, array(
+            "paragraf"  => $key2 + 1,
+            "query"     => ''.$query[0].", ".$query[1].', '.$query[2],
+            "weight"    => $weight,
+            "summary"   => $sentence[(int)$w_desc[0]] . ".<br><b>(Kalimat " . ($w_desc[0] + 1) ." / doc-".$w_desc[0].")</b>"
+          )
+      );
+    }
+    $json           = array("result"=>$result);
+    echo json_encode($json, JSON_PRETTY_PRINT);
+  }
+  public function latihan1()
+  {
+      $words        = $this->input->post('words');
+      if(isset($words)&&!empty($words))
+      {
+          $words       = trim(preg_replace('/[^A-Za-z0-9\-.,]/', ' ', $words));
+          $words       = preg_replace('/\s+/', ' ', $words);
+          $words       = strtolower($words);
+          $word_array  = explode(" ",$words);
+          foreach ($word_array as $key => $value) 
+          {
+              if (preg_match("/(,\z|\.\z)/", $value)) 
+              {
+                  $word_array[$key] = substr_replace($value, " ", -1);
+              }
+              
+              if (preg_match("/yakin/",$value))
+              {
+                 $word_array[$key] = "yakin";
+              }
+              else if(preg_match("/buat/",$value))
+              {
+                   $word_array[$key] = "buat";
+              }
+              else if(preg_match("/baik/",$value))
+              {
+                   $word_array[$key] = "baik";
+              }
+              else if(preg_match("/pupuk/",$value))
+              {
+                   $word_array[$key] = "pupuk";
+              }
+              else if(preg_match("/tiap/",$value))
+              {
+                   $word_array[$key] = "tiap";
+              }
+              else if(preg_match("/lihat/",$value))
+              {
+                   $word_array[$key] = "lihat";
+              }
+              else if(preg_match("/minta/",$value))
+              {
+                   $word_array[$key] = "minta";
+              }
+              else if(preg_match("/angkat/",$value))
+              {
+                   $word_array[$key] = "angkat";
+              }
+              else if(preg_match("/berat/",$value))
+              {
+                   $word_array[$key] = "berat";
+              }
+              else if(preg_match("/tinggi/",$value))
+              {
+                   $word_array[$key] = "tinggi";
+              }
+              else if(preg_match("/harga/",$value))
+              {
+                   $word_array[$key] = "harga";
+              }
+              else if(preg_match("/akhir/",$value))
+              {
+                   $word_array[$key] = "akhir";
+              }
+              else if(preg_match("/sama/",$value))
+              {
+                   $word_array[$key] = "sama";
+              }
+              else if(preg_match("/teriak/",$value))
+              {
+                   $word_array[$key] = "teriak";
+              }
+              else if(preg_match("/tolo*ng/",$value))
+              {
+                   $word_array[$key] = "tolong";
+              }
+              else if(preg_match("/hidup/",$value))
+              {
+                   $word_array[$key] = "hidup";
+              }
+              else if(preg_match("/(kilogram|kg)/",$value))
+              {
+                   $word_array[$key] = "kilogram";
+              }
+              else if(preg_match("/(sentimeter|cm)/",$value))
+              {
+                   $word_array[$key] = "sentimeter";
+              }
+              else if(preg_match("/(^rp\d)/",$value) && preg_match("/(,\-\z|,00\z)/",$value))
+              {
+                   $word_array[$key] = str_replace("rp", "", $value);
+                   array_push($word_array,'rupiah');
+              }
+
+              if($word_array[$key]==" ")
+              {
+                  unset($word_array[$key]);
+              }
+          }
+          $freq_array   = array_count_values($word_array);
+          arsort($freq_array);
+          $result       = array();
+          foreach ($freq_array as $word => $freq)
+          {
+            array_push($result,array("word" => $word, "freq"=>$freq));
+          }
+          $json         = array("result"=>$result, "word_count"=>str_word_count($words),"words"=>$words);
+      }
+      else
+      {
+          $json         = array("result"=>array(), "word_count"=>0);
+      }
+      echo json_encode($json, JSON_PRETTY_PRINT);
+  }
+}
